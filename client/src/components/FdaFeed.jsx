@@ -1,38 +1,46 @@
-// src/components/FdaFeed.jsx
+// client/src/components/FdaFeed.jsx
+// client/src/components/FdaFeed.jsx
 import { useEffect, useState } from 'react';
 
 export default function FdaFeed() {
   const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:5001/fda/search?q=infusion pump&limit=5')
-      .then(res => res.json())
+    // ✅ Fetch newest device adverse events (not filtered by "infusion pump")
+    fetch('http://localhost:5001/fda/search?limit=5') // Removed q=infusion pump
+      .then(res => {
+        if (!res.ok) throw new Error('Network response was not ok');
+        return res.json();
+      })
       .then(data => {
+        console.log('📥 FDA data:', data);
         setEvents(data);
-        setLoading(false);
       })
       .catch(err => {
-        console.error('Error fetching FDA data:', err);
-        setLoading(false);
+        console.error('❌ Fetch error:', err);
+        setError('Failed to load FDA data');
       });
   }, []);
 
+  if (error) return <p className="text-red-600">{error}</p>;
+
   return (
-    <div>
-      {loading ? (
-        <p className="text-gray-500">Loading latest FDA events...</p>
+    <div className="space-y-4">
+      {events.length === 0 ? (
+        <p className="text-gray-500">No events found or still loading…</p>
       ) : (
-        <ul className="space-y-4">
-          {events.map((event, idx) => (
-            <li key={idx} className="border-b pb-2 text-sm">
-              <div><strong>Brand:</strong> {event.brand_name}</div>
-              <div><strong>Type:</strong> {event.event_type}</div>
-              <div><strong>Date:</strong> {event.date}</div>
-              <div><strong>Summary:</strong> {event.summary || "No description available."}</div>
-            </li>
-          ))}
-        </ul>
+        events.map((event, idx) => (
+          <div key={idx} className="p-4 bg-white rounded shadow border">
+            <h3 className="font-semibold text-blue-700">🆔 {event.report_number}</h3>
+            <p><strong>Device:</strong> {event.brand_name}</p>
+            <p><strong>Event Type:</strong> {event.event_type}</p>
+            <p><strong>Date:</strong> {event.date}</p>
+            <p className="text-sm mt-2 text-gray-600">
+              {event.summary || 'No summary available.'}
+            </p>
+          </div>
+        ))
       )}
     </div>
   );

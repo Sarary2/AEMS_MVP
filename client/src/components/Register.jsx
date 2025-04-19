@@ -1,49 +1,54 @@
 // client/src/components/Register.jsx
-import { useState } from "react";
+import React, { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth } from "../firebase"; // ✅ Use named export
 
 export default function Register() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+  const [message, setMessage] = useState("");
 
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      setMsg("✅ Registered successfully!");
-    } catch (error) {
-      console.error(error);
-      setMsg("❌ " + error.message);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // ✅ Get ID token after successful registration
+      const idToken = await userCredential.user.getIdToken();
+      localStorage.setItem("token", idToken);
+
+      setMessage("✅ Registered successfully!");
+    } catch (err) {
+      setMessage(`❌ ${err.message}`);
     }
   };
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow-md">
-      <h2 className="text-xl font-semibold mb-2">Register</h2>
-      <form onSubmit={handleRegister} className="space-y-3">
+    <div className="bg-white p-6 rounded-xl shadow-md">
+      <h2 className="text-xl font-bold mb-4">📝 Register</h2>
+      <form onSubmit={handleRegister} className="space-y-4">
         <input
           type="email"
-          className="border p-2 w-full"
           placeholder="Email"
+          className="w-full border p-2 rounded"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
         />
         <input
           type="password"
-          className="border p-2 w-full"
           placeholder="Password"
+          className="w-full border p-2 rounded"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
         />
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+        >
           Register
         </button>
-        {msg && <p className="text-sm mt-2">{msg}</p>}
       </form>
+      {message && <p className="mt-4 text-sm">{message}</p>}
     </div>
   );
 }
