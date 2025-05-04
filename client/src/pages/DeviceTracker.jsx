@@ -1,43 +1,57 @@
 import React, { useState, useEffect } from 'react';
+import { getToken } from '../utils/getToken'; // This should return the Firebase token.
 
 export default function DeviceTracker() {
-  const [devices, setDevices] = useState(() => {
-    try {
-      const saved = localStorage.getItem("trackedDevices");
-      return saved ? JSON.parse(saved) : [];
-    } catch (err) {
-      console.error("Error parsing trackedDevices from localStorage:", err);
-      return [];
-    }
-  });
+  const [devices, setDevices] = useState([]);
+  const [deviceName, setDeviceName] = useState('');
 
-  // Save to localStorage when devices change
   useEffect(() => {
-    localStorage.setItem("trackedDevices", JSON.stringify(devices));
-  }, [devices]);
+    async function fetchDevices() {
+      const token = await getToken(); // Get the token for authentication
+      if (!token) return;
 
-  const addDevice = (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const newDevice = form.device.value.trim();
-    if (newDevice && !devices.includes(newDevice)) {
-      setDevices([...devices, newDevice]);
+      try {
+        const response = await fetch('http://localhost:5001/api/devices', {
+          headers: {
+            Authorization: `Bearer ${token}`, // Send token for authentication
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setDevices(data); // Update devices state with the fetched data
+        } else {
+          console.error('Failed to fetch devices');
+        }
+      } catch (error) {
+        console.error('Error fetching devices:', error);
+      }
     }
-    form.reset();
+
+    fetchDevices();
+  }, []);
+
+  const handleAddDevice = (e) => {
+    e.preventDefault();
+    if (deviceName.trim() && !devices.includes(deviceName.trim())) {
+      setDevices([...devices, deviceName.trim()]);
+    }
   };
 
-  const removeDevice = (deviceToRemove) => {
-    setDevices(devices.filter(d => d !== deviceToRemove));
+  const handleRemoveDevice = (device) => {
+    setDevices(devices.filter((d) => d !== device));
   };
 
   return (
     <div>
       <h2 className="text-xl font-semibold mb-3">🔧 Tracked Devices</h2>
-      <form onSubmit={addDevice} className="mb-4 flex gap-2">
+      <form onSubmit={handleAddDevice} className="mb-4 flex gap-2">
         <input
           name="device"
           type="text"
           placeholder="Enter device name"
+          value={deviceName}
+          onChange={(e) => setDeviceName(e.target.value)}
           className="border p-2 flex-1 rounded"
           required
         />
@@ -47,14 +61,14 @@ export default function DeviceTracker() {
       </form>
 
       {devices.length === 0 ? (
-        <p className="text-gray-500">No devices added yet.</p>
+        <p className="text-gray-500">No devices found.</p>
       ) : (
         <ul className="space-y-2">
           {devices.map((device, idx) => (
             <li key={idx} className="flex justify-between items-center border p-2 rounded">
               <span>{device}</span>
               <button
-                onClick={() => removeDevice(device)}
+                onClick={() => handleRemoveDevice(device)}
                 className="text-red-500 hover:underline"
               >
                 Remove
