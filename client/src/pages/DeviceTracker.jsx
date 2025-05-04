@@ -31,16 +31,42 @@ export default function DeviceTracker() {
     fetchDevices();
   }, []);
 
-  const handleAddDevice = (e) => {
+  const handleAddDevice = async (e) => {
     e.preventDefault();
-    if (deviceName.trim() && !devices.includes(deviceName.trim())) {
+    if (!deviceName.trim()) return;
+  
+    const token = await getToken();
+    try {
+      await fetch('http://localhost:5001/api/user/devices', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ deviceId: deviceName }),
+      });
       setDevices([...devices, deviceName.trim()]);
+      setDeviceName('');
+    } catch (err) {
+      console.error('Error adding device:', err);
     }
   };
-
-  const handleRemoveDevice = (device) => {
-    setDevices(devices.filter((d) => d !== device));
+  
+  const handleRemoveDevice = async (device) => {
+    const token = await getToken();
+    try {
+      await fetch(`http://localhost:5001/api/user/devices/${device}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setDevices(devices.filter((d) => d !== device));
+    } catch (err) {
+      console.error('Error removing device:', err);
+    }
   };
+  
 
   return (
     <div>

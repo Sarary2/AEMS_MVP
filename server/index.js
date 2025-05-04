@@ -12,15 +12,24 @@ import AdverseEvent from './models/AdverseEvent.js';
 import classifiedDevicesRoute from './routes/classifiedDevices.js';
 import userRoutes from './routes/user.js';
 import adminRoutes from './routes/admin.js';
+import RecallModel from './models/Recall.js';
+import combinedAlertsRoute from './routes/combinedAlerts.js';
+
+
 
 dotenv.config({ path: './.env' });
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// ✅ Middleware
-app.use(cors());
+
+// ✅ Proper CORS setup (only once, and early)
+app.use(cors({
+  origin: 'http://localhost:5175',
+  credentials: true
+}));
 app.use(express.json());
+app.use('/api/alerts', combinedAlertsRoute);
 
 // ✅ MongoDB Connection
 mongoose
@@ -39,41 +48,35 @@ app.get("/fda/alerts/:email", async (req, res) => {
     const user = await User.findOne({ email: req.params.email });
     if (!user || !user.devices || user.devices.length === 0) return res.json([]);
 
-    const trackedDevices = user.devices.map((d) => d.toLowerCase().trim());
-    const query = trackedDevices.map((d) => `"${d}"`).join(" OR ");
+    // Step 1: Normalize device names
+    const trackedDevices = user.devices.map(d =>
+      d.toLowerCase()
+        .replace(/(medical|system|device|inc|corp|ltd|technology)/gi, '') // remove filler
+        .trim()
+    );
 
+    // Step 2: Create query string
+    const query = trackedDevices.map((d) => `"${d}"`).join(" OR ");
+    console.log("🔍 FDA Query:", query);
+
+    // Step 3: Call FDA API
     const response = await axios.get("https://api.fda.gov/device/event.json", {
       params: {
-        search: `device.generic_name:(${query})`,
+        search: `openfda.device_name:(${query})`,
         limit: 10,
       },
     });
 
-    const alerts = response.data.results.map((event) => {
-      let deviceName = "Unknown device";
-
-      if (Array.isArray(event.device) && event.device.length > 0) {
-        const names = event.device.map((d) =>
-          d.brand_name ||
-          d.generic_name ||
-          d.model_name ||
-          d.device_name ||
-          d.openfda?.device_name?.[0]
-        ).filter(Boolean);
-
-        if (names.length > 0) deviceName = names.join(', ');
-      }
-
+    // Step 4: Format alerts
+    const alerts = (response.data.results || []).map((event) => {
+      const device = event.device?.[0] || {};
+      const openfda = device.openfda || {};
       return {
-        device: deviceName,
+        device: device.brand_name || openfda.device_name?.[0] || "Unknown device",
         issue: event.event_type || "Unknown issue",
-        severity:
-          event.event_type === "Death"
-            ? "major"
-            : event.event_type === "Malfunction"
-            ? "moderate"
-            : "minor",
+        severity: event.event_type === "Death" ? "major" : event.event_type === "Malfunction" ? "moderate" : "minor",
         date: event.date_received || event.date_of_event || "Unknown date",
+        summary: event.mdr_text?.[0]?.text || "No description provided."
       };
     });
 
@@ -84,14 +87,23 @@ app.get("/fda/alerts/:email", async (req, res) => {
   }
 });
 
+
 // ✅ MAUDE Alerts Route
 app.get("/maude/alerts/:email", async (req, res) => {
   try {
     const user = await User.findOne({ email: req.params.email });
     if (!user || !user.devices || user.devices.length === 0) return res.json([]);
 
-    const tracked = user.devices.map((d) => d.toLowerCase().trim());
+    // Normalize device names
+    const tracked = user.devices.map((d) => 
+      d.toLowerCase()
+        .replace(/(medical|device|system|inc|corp|ltd)/gi, '')
+        .trim()
+    );
 
+    console.log("🔍 MAUDE search terms:", tracked);
+
+    // Perform regex query
     const alerts = await AdverseEvent.find({
       $or: tracked.map((device) => ({
         device_name: { $regex: new RegExp(device, "i") },
@@ -107,12 +119,7 @@ app.get("/maude/alerts/:email", async (req, res) => {
         manufacturer: e.manufacturer || e["Manufacturer"] || e.raw?.["Manufacturer"] || "Unknown manufacturer",
         date: e.date_received || e["Date Received"] || e.raw?.["Date Received"] || "Unknown date",
         description: e.description || e["Event Text"] || e.raw?.["Event Text"] || "No description",
-        severity:
-          issue === "Death"
-            ? "major"
-            : issue === "Malfunction"
-            ? "moderate"
-            : "minor",
+        severity: issue === "Death" ? "major" : issue === "Malfunction" ? "moderate" : "minor",
       };
     });
 
@@ -122,6 +129,7 @@ app.get("/maude/alerts/:email", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch MAUDE alerts" });
   }
 });
+
 
 // ✅ Firebase-Protected Test Route
 app.get('/protected', async (req, res) => {

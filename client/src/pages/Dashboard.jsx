@@ -10,34 +10,32 @@ import axios from 'axios';
 export default function Dashboard() {
   const [user, loading] = useAuthState(auth);
   const [alerts, setAlerts] = useState([]);
+  const [alertsLoading, setAlertsLoading] = useState(true);
   const [recalls, setRecalls] = useState([]);
 
-  // Fetching data after the user is logged in
   useEffect(() => {
     if (user) {
-      // Fetch FDA alerts
-      axios.get(`http://localhost:5001/fda/alerts/${user.email}`)
-        .then(response => {
-          setAlerts(response.data);
-        })
-        .catch(error => {
-          console.error("Error fetching FDA alerts:", error);
-        });
+      console.log("👤 Firebase user email:", user.email);
+      setAlertsLoading(true);
 
-      // Fetch recalls
-      axios.get(`http://localhost:5001/api/recalls`)
-        .then(response => {
-          setRecalls(response.data);
+      axios.get(`http://localhost:5001/api/alerts/${user.email}`)
+        .then((res) => {
+          console.log("📦 Received alerts from backend:", res.data);
+          setAlerts(res.data);
         })
-        .catch(error => {
-          console.error("Error fetching recalls:", error);
-        });
+        .catch((err) => {
+          console.error("❌ Error fetching alerts:", err);
+        })
+        .finally(() => setAlertsLoading(false));
+
+      axios.get(`http://localhost:5001/api/recalls`)
+        .then((res) => setRecalls(res.data))
+        .catch((err) => console.error("❌ Error fetching recalls:", err));
     }
   }, [user]);
 
   return (
     <div className="flex min-h-screen bg-gray-100 font-sans">
-      {/* Sidebar */}
       <aside className="w-64 bg-blue-900 text-white p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-wide">AEMS</h1>
@@ -47,39 +45,37 @@ export default function Dashboard() {
           <a href="#tracked" className="block hover:bg-blue-800 p-2 rounded">📌 Tracked Devices</a>
           <a href="#alerts" className="block hover:bg-blue-800 p-2 rounded">🔔 Alerts</a>
           <a href="#recalls" className="block hover:bg-blue-800 p-2 rounded">📢 Recalls</a>
-          <a href="#evaluate" className="block hover:bg-blue-800 p-2 rounded">🩺 Device Evaluation</a>
         </nav>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 p-8 space-y-8">
-        {/* Tracked Devices Section */}
         <section id="tracked" className="bg-white p-6 rounded-lg shadow">
           <DeviceTracker />
         </section>
 
-        {/* Alerts Section */}
         <section id="alerts" className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold">FDA Alerts</h3>
-          <FdaFeed alerts={alerts} />
+          <h3 className="text-xl font-semibold mb-4">🧠 Combined Alerts</h3>
+          {alertsLoading ? (
+            <p className="text-gray-500">Loading alerts...</p>
+          ) : (
+            <FdaFeed alerts={alerts} />
+          )}
         </section>
 
-        {/* Recalls Section */}
         <section id="recalls" className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-xl font-semibold">Device Recalls</h3>
-          <ul>
-            {recalls.length > 0 ? recalls.map((recall, idx) => (
-              <li key={idx} className="mb-4">
-                <div><strong>Device Name:</strong> {recall.device_name}</div>
-                <div><strong>Recall Reason:</strong> {recall.recall_reason}</div>
-              </li>
-            )) : (
-              <p>No recalls found.</p>
-            )}
-          </ul>
+          <h3 className="text-xl font-semibold mb-4">📢 Device Recalls</h3>
+          {recalls.length > 0 ? (
+            <ul className="space-y-2">
+              {recalls.map((recall, idx) => (
+                <li key={idx} className="text-sm border-b pb-2">
+                  <strong>Device:</strong> {recall.device_name}<br />
+                  <strong>Reason:</strong> {recall.recall_reason}
+                </li>
+              ))}
+            </ul>
+          ) : <p>No recalls found.</p>}
         </section>
 
-        {/* Login/Register */}
         {!user ? (
           <>
             <Login />
